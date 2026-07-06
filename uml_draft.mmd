@@ -1,0 +1,48 @@
+classDiagram
+    class Owner {
+      +int id
+      +string name
+      +dict availability
+      +dict preferences
+      +update_availability(start,end,days)
+      +is_available(time_window) bool
+    }
+    class Pet {
+      +int id
+      +string name
+      +string species
+      +int age
+      +list tasks
+      +add_task(type,frequency)
+      +get_daily_requirements() list
+    }
+    class Task {
+      +int id
+      +string title
+      +int duration_minutes
+      +string priority
+      +string recurrence
+      +preferred_time_windows
+      +is_recurring() bool
+      +next_occurrence(from_date) datetime
+    }
+    class ScheduledItem {
+      +datetime start
+      +int duration_minutes
+      +Task task
+      +string status
+    }
+    class Scheduler {
+      +Owner owner
+      +Pet pet
+      +list~Task~ tasks
+      +generate_plan(date) list~ScheduledItem~
+      +resolve_conflicts(plan) list~ScheduledItem~
+      +explain_plan(plan) string
+    }
+    Owner "1" *-- "*" Pet : "owns"
+    Pet "1" -- "*" Task : "has tasks"
+    Scheduler ..> Owner : "reads"
+    Scheduler ..> Pet : "reads"
+    Scheduler ..> Task : "schedules"
+    Scheduler "1" o-- "*" ScheduledItem : "produces"
