@@ -44,15 +44,24 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+Here's what the CLI output looks like when you run the scheduler:
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Today's Schedule
+====================
+1. 08:00 | Bella | Morning walk | Priority: high
+2. 18:00 | Bella | Dinner feed | Priority: medium
+3. 19:30 | Luna | Clean litter box | Priority: high
+
+Summary
+--------------------
+Planned tasks:
+- Morning walk for Bella (priority: high, due: 2026-07-06)
+- Dinner feed for Bella (priority: medium, due: 2026-07-06)
+- Clean litter box for Luna (priority: high, due: 2026-07-06)
 ```
+
+Tasks are sorted by priority and displayed with time, pet name, description, and priority level for easy reference.
 
 ## 🧪 Testing PawPal+
 
@@ -72,23 +81,25 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.score_task()`, `generate_plan()` | Ranks tasks by priority (high/medium/low) and urgency |
+| Filtering | `Pet.get_tasks(include_completed=False)` | Excludes completed tasks from scheduling |
+| Conflict handling | `Scheduler.resolve_conflicts()` | Removes duplicate task entries and prefers higher-scored items |
+| Recurring tasks | `Task.is_recurring()`, `Task.next_occurrence()` | Supports daily, weekly, and one-time task frequencies |
+| Due date awareness | `Task.estimate_score()` | Boosts priority for overdue or same-day tasks |
+| Owner preferences | `Owner.set_preferences()` | Allows customization of scheduling rules |
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Follow these steps to generate your first PawPal+ daily schedule:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. **Set your name**: Enter your name in the "Owner Info" field (e.g., "Alex"). This personalizes your profile and persists across all visits to the app.
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+2. **Add a pet**: Scroll to "Add Pet," enter a pet name (e.g., "Biscuit"), select a species ("dog," "cat," or "other"), and click "Add pet." Your pet now appears in the "Pets" table showing its name, species, age, and task count.
+
+3. **Add tasks**: In the "Add Task" section, select your pet from the dropdown, enter a task description (e.g., "Morning walk"), choose a due date and time, set a duration (in minutes), pick a priority level (low/medium/high), and select frequency (none/daily/weekly). Click "Add task." The task immediately appears in the "Current Tasks by Pet" section.
+
+4. **View your pet's tasks**: Expand the collapsible card for your pet under "Current Tasks by Pet" to see all pending tasks. Each task shows a priority indicator (🔴 high, 🟡 medium, 🟢 low) and its due date for quick reference.
+
+5. **Generate a schedule**: Choose a date in the "Generate Schedule" section, click "Generate schedule," and PawPal+ produces a prioritized daily plan. Each task shows its time slot, priority level, description, and the pet it belongs to. Click "Scheduling Rationale" to see why tasks were ordered that way.
