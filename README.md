@@ -1,6 +1,3 @@
-Here’s a polished updated `README.md` version you can use:
-
-```md
 # PawPal+ (Module 2 Project)
 
 PawPal+ is a beginner-friendly pet care scheduler built with Python and Streamlit. It helps a pet owner track care tasks, stay consistent with routines, and generate a daily plan with clear explanations.
@@ -121,4 +118,3 @@ Pick a date and click **Generate schedule**. PawPal+ displays an ordered task ta
 ## Notes
 
 This project intentionally favors readable, beginner-friendly scheduling logic over complex optimization. The scheduler focuses on clarity, predictable behavior, and explainable results, making it a strong foundation for future improvements such as persistence, weighted priority scheduling, or overlap-aware conflict handling.
-```
