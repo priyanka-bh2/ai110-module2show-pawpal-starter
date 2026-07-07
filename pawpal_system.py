@@ -151,13 +151,22 @@ class Task:
             self.mark_complete()
 
     def is_recurring(self) -> bool:
-        """Return True if the task is recurring based on its frequency field."""
+        """Return True when `frequency` indicates a recurring task.
+
+        Treats values like 'daily' or 'weekly' as recurring. Values 'none',
+        'once', or an empty frequency are treated as non-recurring.
+        """
         if not self.frequency:
             return False
         return self.frequency.lower().strip() not in {"none", "once", "single"}
 
     def next_occurrence(self, from_date: datetime) -> Optional[datetime]:
-        """Return the next occurrence datetime of the task after from_date, if any."""
+        """Return the next occurrence after `from_date` for recurring tasks.
+
+        Uses simple `timedelta` steps for common frequencies: daily (+1 day),
+        weekly (+7 days), monthly (+30 days). For non-recurring tasks this
+        returns the `due_date` if it is on or after `from_date`, otherwise None.
+        """
         if self.due_date is None:
             return None
 
@@ -180,7 +189,11 @@ class Task:
         return candidate if candidate >= from_date else None
 
     def conflicts_with(self, other: "Task") -> bool:
-        """Return True if this task conflicts (same datetime) with another task."""
+        """Return True when this task and `other` are scheduled at the same datetime.
+
+        Compares `due_date` and, if provided, the `time` field. If either task
+        lacks a `due_date` this returns False.
+        """
         if self.due_date is None or other.due_date is None:
             return False
 
@@ -195,7 +208,13 @@ class Task:
         return self_dt == other_dt
 
     def estimate_score(self, owner: Owner, pet: Pet) -> float:
-        """Compute a heuristic score for scheduling priority and urgency."""
+        """Compute a simple heuristic score used to rank tasks in the plan.
+
+        Factors include explicit priority (high/medium/low), whether the task
+        is completed (large negative penalty), due date urgency (overdue or
+        due within 1 day), and whether the task has a fixed time. Owner
+        preferences can add a small boost for preferred task types.
+        """
         priority_weights = {"high": 3.0, "medium": 2.0, "low": 1.0}
         score = priority_weights.get(self.priority.lower(), 2.0) * 10
 
@@ -244,6 +263,7 @@ class Scheduler:
     day_window: Dict[str, time] = field(default_factory=dict)
     rules: Dict[str, Any] = field(default_factory=dict)
     scheduled_plan: List[Dict[str, Any]] = field(default_factory=list)
+    scheduled_warnings: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Initialize the Scheduler pets list from provided pet or owner."""
@@ -260,7 +280,118 @@ class Scheduler:
         collected.extend(task for task in self.tasks if not task.completed)
         return collected
 
+    def filter_tasks(self, pet: Optional[Pet] = None, completed: Optional[bool] = None) -> List[Task]:
+        """Return tasks optionally filtered by `pet` and `completed` state.
+
+        - `pet`: when provided, only tasks belonging to that pet are returned.
+        - `completed`: when True/False, include only completed or only pending tasks.
+        When `completed` is None no completion filtering is applied.
+        """
+        results: List[Task] = []
+        # search pets' tasks
+        for p in self.pets:
+            if pet is not None and p is not pet:
+                continue
+            for t in p.tasks:
+                if completed is None or t.completed == completed:
+                    results.append(t)
+
+        # include scheduler-level tasks
+        for t in self.tasks:
+            if completed is None or t.completed == completed:
+                results.append(t)
+
+        return results
+
+    def sort_tasks_by_time(self, tasks: List[Task]) -> List[Task]:
+        """Return `tasks` sorted by clock time; untimed tasks appear last.
+
+        This is a convenience for displaying tasks in a human-friendly order.
+        """
+        tasks_with_time = [t for t in tasks if t.time is not None]
+        tasks_without_time = [t for t in tasks if t.time is None]
+        tasks_with_time.sort(key=lambda t: (t.time.hour, t.time.minute))
+        return tasks_with_time + tasks_without_time
+
+    def find_task_by_id(self, task_id: Optional[int]) -> Optional[Task]:
+        """Search for a task by `task_id` across pets and scheduler tasks."""
+        if task_id is None:
+            return None
+        for p in self.pets:
+            for t in p.tasks:
+                if t.task_id == task_id:
+                    return t
+        for t in self.tasks:
+            if t.task_id == task_id:
+                return t
+        return None
+
+    def complete_task(self, task_identifier: Any) -> Optional[Task]:
+        """Mark a task complete and (for daily/weekly tasks) create the next occurrence.
+
+        `task_identifier` may be either a `Task` instance or a `task_id` integer.
+        If the task is recurring and has a `due_date`, a new `Task` instance
+        for the next date is created by adding a `timedelta` (1 day or 7 days)
+        and returned. If no next occurrence is created, returns `None`.
+        """
+        # find task object
+        task_obj: Optional[Task]
+        if isinstance(task_identifier, Task):
+            task_obj = task_identifier
+        else:
+            task_obj = self.find_task_by_id(task_identifier)
+
+        if task_obj is None:
+            return None
+
+        # mark complete
+        task_obj.mark_complete()
+
+        # auto-create next occurrence for daily/weekly recurring tasks
+        if task_obj.is_recurring() and task_obj.due_date is not None and task_obj.frequency:
+            freq = task_obj.frequency.lower().strip()
+            if freq == "daily":
+                delta = timedelta(days=1)
+            elif freq == "weekly":
+                delta = timedelta(weeks=1)
+            else:
+                delta = None
+
+            if delta is not None:
+                new_due = task_obj.due_date + delta
+                new_task = Task(
+                    task_id=None,
+                    description=task_obj.description,
+                    time=task_obj.time,
+                    frequency=task_obj.frequency,
+                    due_date=new_due,
+                    priority=task_obj.priority,
+                    duration_minutes=task_obj.duration_minutes,
+                    recurrence=task_obj.recurrence,
+                    preferred_time_windows=list(task_obj.preferred_time_windows),
+                )
+
+                # add to the same pet if found there, otherwise to scheduler tasks
+                for p in self.pets:
+                    if task_obj in p.tasks:
+                        p.add_task(new_task)
+                        return new_task
+
+                # fallback to scheduler-level tasks list
+                self.tasks.append(new_task)
+                return new_task
+
+        return None
+
     def generate_plan(self, date: datetime) -> List[Dict[str, Any]]:
+        """Generate a scheduled plan for the given `date`.
+
+        Collects pending tasks, ranks them using `score_task`, removes exact
+        duplicates with `resolve_conflicts`, sorts the final plan for display,
+        and refreshes `self.scheduled_warnings` (conflict messages).
+        Returns a list of plan entries (dicts) containing task metadata.
+        """
+
         pending_tasks = self._collect_tasks()
         unique_tasks: List[Task] = []
         seen: set[tuple[Any, ...]] = set()
@@ -312,10 +443,16 @@ class Scheduler:
         )
 
         self.scheduled_plan = plan
+        # refresh conflict warnings for the current plan
+        self.scheduled_warnings = self.detect_conflicts(self.scheduled_plan)
         return self.scheduled_plan
 
     def score_task(self, task: Task, time_slot: Dict[str, time]) -> float:
-        """Return a numeric score for how important/urgent a task is."""
+        """Return a numeric score used for ranking tasks in `generate_plan()`.
+
+        This delegates to `Task.estimate_score()` so the scoring rules are
+        centralized on the `Task` class. `time_slot` is reserved for future use.
+        """
         return task.estimate_score(self.owner, self.pets[0] if self.pets else Pet())
 
     def resolve_conflicts(self, candidate_plan: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -331,6 +468,53 @@ class Scheduler:
             seen.add(key)
 
         return resolved
+
+    def detect_conflicts(self, plan: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+        """Detect exact datetime conflicts in the plan and return readable warnings.
+
+        If `plan` is None, analyze `self.scheduled_plan`.
+        A conflict is when two or more items have the same date+time.
+        """
+        if plan is None:
+            plan = list(self.scheduled_plan)
+
+        slots: Dict[Any, List[Dict[str, Any]]] = {}
+
+        for item in plan:
+            due = item.get("due_date")
+            t = item.get("time")
+
+            # skip items without a concrete datetime or time
+            if due is None and t is None:
+                continue
+
+            if due is not None and isinstance(due, datetime):
+                # if time provided, set hour/minute from it; otherwise use due as-is
+                if t is not None:
+                    try:
+                        sched = due.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
+                    except Exception:
+                        sched = due
+                else:
+                    sched = due
+                key = sched
+            else:
+                # no due date: group by time-only key
+                key = ("time-only", t.hour if t else None, t.minute if t else None)
+
+            slots.setdefault(key, []).append(item)
+
+        warnings: List[str] = []
+        for key, items in slots.items():
+            if len(items) > 1:
+                if isinstance(key, datetime):
+                    timestr = key.strftime("%Y-%m-%d %H:%M")
+                else:
+                    timestr = str(key)
+                names = ", ".join([f"{i.get('description')} ({i.get('pet')})" for i in items])
+                warnings.append(f"Conflict at {timestr}: {names}")
+
+        return warnings
 
     def explain_plan(self, plan: List[Dict[str, Any]]) -> str:
         """Return a short human-readable explanation of the scheduled plan."""

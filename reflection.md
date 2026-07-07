@@ -25,6 +25,8 @@
 
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
+ 
+The scheduler favors simple, predictable heuristics (priority + due date + small urgency boost) instead of solving a full scheduling optimization problem. This keeps the code easy to understand and maintain for beginners, and it is fast enough for a single-owner, small-pet use case. The tradeoff is that the planner may not find a globally optimal schedule when many constraints interact (for example, minimizing walking time across multiple pets), but it does provide sensible, explainable results and non-fatal conflict warnings. For recurring tasks we use straightforward `timedelta` steps (daily/weekly) rather than a complex calendar library — this keeps recurrence logic transparent while covering common needs.
 
 ---
 
