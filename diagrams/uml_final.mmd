@@ -1,0 +1,83 @@
+classDiagram
+    class Owner {
+        +owner_id : int
+        +name : str
+        +availability : dict
+        +preferences : dict
+        +timezone : str
+        +contact_info : str
+        +pets : List~Pet~
+        +update_availability(start, end, days)
+        +set_preferences(prefs)
+        +is_available(time_window) bool
+        +add_pet(pet)
+        +get_pets() List~Pet~
+        +get_all_tasks(include_completed=False) List~Task~
+        +to_dict() dict
+    }
+
+    class Pet {
+        +pet_id : int
+        +name : str
+        +species : str
+        +age : int
+        +daily_needs : List~str~
+        +notes : str
+        +tasks : List~Task~
+        +add_need(task_type, frequency)
+        +get_daily_requirements() List~str~
+        +age_in_years() int
+        +add_task(task)
+        +get_tasks(include_completed=True) List~Task~
+        +get_pending_tasks() List~Task~
+        +to_dict() dict
+    }
+
+    class Task {
+        +task_id : int
+        +description : str
+        +time : time
+        +frequency : str
+        +due_date : datetime
+        +completed : bool
+        +priority : str
+        +duration_minutes : int
+        +recurrence : str
+        +preferred_time_windows : List~dict~
+        +last_done : datetime
+        +mark_complete()
+        +mark_incomplete()
+        +toggle_complete()
+        +is_recurring() bool
+        +next_occurrence(from_date) datetime
+        +conflicts_with(other) bool
+        +estimate_score(owner, pet) float
+        +to_dict() dict
+    }
+
+    class Scheduler {
+        +owner : Owner
+        +pet : Pet
+        +pets : List~Pet~
+        +tasks : List~Task~
+        +day_window : dict
+        +rules : dict
+        +scheduled_plan : List~dict~
+        +scheduled_warnings : List~str~
+        +filter_tasks(pet=None, completed=None) List~Task~
+        +sort_tasks_by_time(tasks) List~Task~
+        +find_task_by_id(task_id) Task
+        +complete_task(task_identifier) Task
+        +generate_plan(date) List~dict~
+        +score_task(task, time_slot) float
+        +resolve_conflicts(candidate_plan) List~dict~
+        +detect_conflicts(plan=None) List~str~
+        +explain_plan(plan) str
+        +add_constraint(rule)
+    }
+
+    Owner "1" *-- "0..*" Pet : owns
+    Pet "1" *-- "0..*" Task : has tasks
+    Scheduler --> Owner : uses
+    Scheduler --> Pet : schedules for
+    Scheduler --> Task : evaluates

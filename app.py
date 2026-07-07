@@ -141,26 +141,44 @@ if st.button("Generate schedule", key="generate_schedule_button"):
     else:
         sched = Scheduler(owner=owner, pets=owner.get_pets())
         plan = sched.generate_plan(datetime.combine(schedule_date, dtime.min))
-        if not plan:
+        if plan:
+            st.success("Schedule generated successfully!")
+        # Show only tasks that are relevant for the selected schedule date.
+        daily_plan = [
+            item
+            for item in plan
+            if item.get("due_date") is not None and item["due_date"].date() == schedule_date
+        ]
+
+        if not daily_plan:
             st.info("No tasks scheduled for that date.")
         else:
+
+            formatted_plan = []
+            for item in daily_plan:
+                time_text = item.get("time").strftime("%H:%M") if item.get("time") else "Anytime"
+                due_text = item.get("due_date").strftime("%Y-%m-%d") if item.get("due_date") else "No due date"
+                formatted_plan.append(
+                    {
+                        "Time": time_text,
+                        "Pet": item.get("pet", "Unknown"),
+                        "Task": item.get("description", ""),
+                        "Priority": item.get("priority", "").capitalize(),
+                        "Due": due_text,
+                    }
+                )
+
             st.markdown("### 📋 Schedule for " + schedule_date.strftime("%A, %B %d, %Y"))
-            for i, item in enumerate(plan, start=1):
-                task_time = item.get("time")
-                time_text = task_time.strftime("%H:%M") if task_time else "Anytime"
-                priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(item['priority'], "⚪")
-                
-                with st.container():
-                    col1, col2, col3 = st.columns([0.5, 2, 4])
-                    with col1:
-                        st.write(f"**{i}.**")
-                    with col2:
-                        st.write(f"**{time_text}**")
-                    with col3:
-                        st.write(f"{priority_emoji} {item['description']} *({item['pet']})*")
-            
+            st.table(formatted_plan)
+
+            conflicts = sched.detect_conflicts(daily_plan)
+            if conflicts:
+                for warning in conflicts:
+                    st.warning(warning)
+
             with st.expander("📝 Scheduling Rationale"):
-                st.text(sched.explain_plan(plan))
+                st.text(sched.explain_plan(daily_plan))
+        # End schedule generation
 
 st.divider()
 st.caption("🐾 PawPal+ — Powered by intelligent pet care scheduling")
